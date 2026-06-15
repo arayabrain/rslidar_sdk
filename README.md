@@ -41,6 +41,70 @@ To integrate the Lidar driver into your own projects, please use the rs_driver.
 - XYZI - x, y, z, intensity
 - XYZIRT - x, y, z, intensity, ring, timestamp
 
+## 1.3 Managed (lifecycle) node — fork addition
+
+> This section documents the `arayabrain` fork only; upstream rslidar_sdk does
+> not ship it.
+
+Alongside the stock `rslidar_sdk_node` this fork builds a second ROS 2
+executable, **`rslidar_sdk_node_lifecycle`**, a
+`rclcpp_lifecycle::LifecycleNode` (node name `rslidar_lidar_publisher`) that
+wraps the same `NodeManager`. It lets the LiDAR be **started and stopped at
+runtime** under a lifecycle manager, instead of the stock node which reads its
+YAML and runs until `SIGINT`. This mirrors the lifecycle wrapper used for the
+Livox driver and is what the unit-dolly field console drives.
+
+State mapping:
+
+| Transition     | What happens |
+|----------------|--------------|
+| `configure`    | Load + validate the config YAML. No hardware touched; topics not yet advertised. |
+| `activate`     | Build a `NodeManager`, bind sockets, start the receiver. `/rslidar_points` (+ `/rslidar_imu_data` when IMU parsing is on) start flowing. |
+| `deactivate`   | Tear the manager down (driver stop + decode threads joined). Publishing stops. |
+| `cleanup` / `shutdown` | Drop the manager and cached config. |
+
+A **fresh `NodeManager` is built on every activation** rather than re-using one:
+the SDK's `SourceDriver::stop()` joins its decode threads and is single-shot, so
+it cannot be re-started. Rebuilding per activation gives clean, repeatable
+`activate`/`deactivate` cycles.
+
+### Parameters
+
+| Parameter     | Default | Description |
+|---------------|---------|-------------|
+| `config_path` | `<pkg>/config/config.yaml` | Path to the SDK config YAML (same file the stock node uses). |
+
+### Usage
+
+Run it directly and drive the transitions by hand:
+
+```bash
+ros2 run rslidar_sdk rslidar_sdk_node_lifecycle \
+    --ros-args -p config_path:=/path/to/config.yaml
+
+# in another shell
+ros2 lifecycle set /rslidar_lidar_publisher configure
+ros2 lifecycle set /rslidar_lidar_publisher activate     # LiDAR starts publishing
+ros2 lifecycle set /rslidar_lidar_publisher deactivate   # LiDAR stops
+ros2 lifecycle get /rslidar_lidar_publisher
+```
+
+In the unit-dolly workspace it is normally launched (with host-IP detection and
+config templating) via `unit_dolly_bringup`, which defaults to the lifecycle
+variant and can auto-activate on launch:
+
+```bash
+ros2 launch unit_dolly_bringup robosense_fairy.launch.py            # lifecycle, autostarted
+ros2 launch unit_dolly_bringup robosense_fairy.launch.py autostart:=false   # stay inactive
+ros2 launch unit_dolly_bringup robosense_fairy.launch.py use_lifecycle:=false  # stock node
+```
+
+> **Note:** with no LiDAR connected, `activate` still succeeds (sockets bind) and
+> you will see `ERRCODE_MSOPTIMEOUT` in the log — that is the expected "no MSOP
+> packets arriving" message. A genuine driver-init failure (bad `lidar_type`,
+> port already bound) makes the SDK call `exit(-1)`, terminating the process,
+> matching the stock node's behavior.
+
 ## 2 Download
 
 ### 2.1 Download via Git
