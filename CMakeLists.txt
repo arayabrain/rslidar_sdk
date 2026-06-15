@@ -141,7 +141,8 @@ if(rclcpp_FOUND)
   find_package(ament_cmake REQUIRED)
   find_package(sensor_msgs REQUIRED)
   find_package(rslidar_msg REQUIRED)
-  find_package(std_msgs REQUIRED)                      
+  find_package(std_msgs REQUIRED)
+  find_package(rclcpp_lifecycle REQUIRED)
 
 else(rclcpp_FOUND)
   message(=============================================================)
@@ -188,14 +189,31 @@ endif(roscpp_FOUND)
 #Ros2#
 if(rclcpp_FOUND)
 
-  ament_target_dependencies(rslidar_sdk_node 
-    rclcpp 
-    std_msgs 
-    sensor_msgs 
+  ament_target_dependencies(rslidar_sdk_node
+    rclcpp
+    std_msgs
+    sensor_msgs
+    rslidar_msg)
+
+  # Managed (lifecycle) variant of the driver node
+  add_executable(rslidar_sdk_node_lifecycle
+                 node/rslidar_sdk_node_lifecycle.cpp
+                 src/manager/node_manager.cpp)
+
+  target_link_libraries(rslidar_sdk_node_lifecycle
+                        ${YAML_CPP_LIBRARIES}
+                        ${rs_driver_LIBRARIES})
+
+  ament_target_dependencies(rslidar_sdk_node_lifecycle
+    rclcpp
+    rclcpp_lifecycle
+    std_msgs
+    sensor_msgs
     rslidar_msg)
 
   install(TARGETS
     rslidar_sdk_node
+    rslidar_sdk_node_lifecycle
     DESTINATION lib/${PROJECT_NAME})
 
   install(DIRECTORY

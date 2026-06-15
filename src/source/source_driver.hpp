@@ -185,7 +185,21 @@ inline void SourceDriver::stop()
   driver_ptr_->stop();
 
   to_exit_process_ = true;
-  point_cloud_process_thread_.join();
+  // joinable() guards a second stop() (explicit stop + the destructor's stop())
+  // so it is a no-op instead of aborting on an already-joined thread.
+  if (point_cloud_process_thread_.joinable())
+  {
+    point_cloud_process_thread_.join();
+  }
+#ifdef ENABLE_IMU_DATA_PARSE
+  // The IMU process thread is spawned in init() but is otherwise never joined,
+  // so a destroyed SourceDriver would leave a joinable std::thread and call
+  // std::terminate(). Joining it here keeps teardown clean.
+  if (imu_data_process_thread_.joinable())
+  {
+    imu_data_process_thread_.join();
+  }
+#endif
 }
 
 inline std::shared_ptr<LidarPointCloudMsg> SourceDriver::getPointCloud(void)
