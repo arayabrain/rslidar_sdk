@@ -34,6 +34,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "source/source.hpp"
 
+#include <stdexcept>
+
 #include <rs_driver/api/lidar_driver.hpp>
 #include <rs_driver/utility/sync_queue.hpp>
 
@@ -166,7 +168,8 @@ inline void SourceDriver::init(const YAML::Node& config)
   if (!driver_ptr_->init(driver_param))
   {
     RS_ERROR << "Driver Initialize Error...." << RS_REND;
-    exit(-1);
+    throw std::runtime_error("rslidar driver init failed (check lidar_type, "
+                             "host_address, and that ports 6699/7788/6688 are free)");
   }
 }
 
